@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Words (Sheets Sync)</title>
+    <style>
+        /* 樣式保持 V5 低調版 */
+        :root {
+            --bg-color: #f9f9f9;
+            --container-bg: #ffffff;
+            --border-color: #dcdcdc;
+            --text-color: #444;
+            --btn-bg: #f0f0f0;
+            --btn-hover: #e0e0e0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-size: 14px;
+        }
+        #app-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: var(--container-bg);
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+        h1 {
+            margin: 0 0 15px 0;
+            font-size: 1.1rem;
+            color: #777;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+
+        /* --- 控制列 --- */
+        .controls-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        button, select {
+            background-color: var(--btn-bg);
+            border: 1px solid var(--border-color);
+            color: #333;
+            padding: 5px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+            outline: none;
+        }
+        button:hover { background-color: var(--btn-hover); }
+        #play-pause-btn { min-width: 40px; text-align: center; }
+        
+        .checkbox-group {
+            display: flex;
+            gap: 15px;
+            font-size: 13px;
+            color: #555;
+            margin-left: auto;
+        }
+        .checkbox-item { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+        /* --- 上半部顯示區 (圖片 或 文字) --- */
+        #display-area {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            border: 1px solid var(--border-color);
+            background: #fafafa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 8px;
+            overflow: hidden;
+            text-align: center;
+        }
+        
+        #current-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: none;
+        }
+        #top-text-display {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #333;
+            padding: 20px;
+            display: none;
+            word-break: break-word;
+        }
+
+        /* 導航按鈕 */
+        .nav-btn {
+            position: absolute;
+            top: 0; bottom: 0;
+            width: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ccc;
+            font-size: 24px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .nav-btn:hover { color: #666; background: rgba(0,0,0,0.02); }
+        #prev-btn { left: 0; }
+        #next-btn { right: 0; }
+
+        /* --- 下方文字顯示區 --- */
+        #word-display {
+            width: 100%;
+            min-height: 80px;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid var(--border-color);
+            background: #fff;
+            color: #333;
+            text-align: center;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            white-space: pre-wrap;
+            margin-top: 8px;
+        }
+        
+        .text-hidden { color: transparent !important; text-shadow: none; }
+        
+        /* --- 編輯區提示 --- */
+        details {
+            margin-top: 15px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 10px;
+            color: #777;
+        }
+        summary { cursor: pointer; font-size: 12px; margin-bottom: 10px; outline: none; }
+        .sync-info {
+            background-color: #f0f8ff;
+            border: 1px solid #cceeff;
+            padding: 10px;
+            color: #0056b3;
+            font-size: 13px;
+            border-radius: 3px;
+        }
+        .sync-info strong { color: #003366; }
+
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <h1>Words (Sheets Sync)</h1>
+
+    <div class="controls-bar">
+        <button id="play-pause-btn" title="播放/暫停">▶</button>
+        <select id="interval-select">
+            <option value="3000">3s</option>
+            <option value="4000">4s</option>
+            <option value="5000">5s</option>
+        </select>
+        <button id="refresh-btn" title="重新載入資料">🔄</button>
+        
+        <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox" id="show-all-check"> Show all</label>
+            <label class="checkbox-item"><input type="checkbox" id="hide-text-check"> Hide</label>
+        </div>
+    </div>
+
+    <div id="display-area">
+        <div id="prev-btn" class="nav-btn">❮</div>
+        <div id="next-btn" class="nav-btn">❯</div>
+        
+        <img id="current-image" src="" alt="">
+        <div id="top-text-display">載入中...</div>
+    </div>
+
+    <div id="word-display"></div>
+
+    <details open>
+        <summary>資料庫資訊</summary>
+        <div class="sync-info">
+            <strong>目前使用 Google Sheets 雲端同步模式。</strong><br>
+            所有新增、修改或刪除動作請直接在您的 <a id="sheet-link" href="#" target="_blank">Google 試算表後台</a> 進行。<br>
+            點擊上方的 **🔄** 按鈕即可重新載入最新資料。
+        </div>
+    </details>
+</div>
+
+<script>
+    // ⚠️ 步驟 2：請將您取得的 Google Sheet ID 貼到這裡
+    const SHEET_ID = '11ulV3mJzSeqObgS36-6IlLB8kC6EPByxVLx9e_I0bMU'; // <--- 請替換成您的 ID
+    
+    // 試算表發佈的 CSV 網址格式
+    const DATA_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=0`;
+
+    // --- 資料結構與變數 (現在由 Sheets 讀取) ---
+    let wordCards = []; // 儲存從 Google Sheets 讀取的資料
+    let currentIndex = -1;
+    let playInterval = null;
+    let isPlaying = false;
+    let tempReveal = false;
+
+    // --- DOM ---
+    const els = {
+        img: document.getElementById('current-image'),
+        topTextDisplay: document.getElementById('top-text-display'),
+        wordDisplay: document.getElementById('word-display'),
+        playBtn: document.getElementById('play-pause-btn'),
+        showAllCheck: document.getElementById('show-all-check'),
+        hideTextCheck: document.getElementById('hide-text-check'),
+        refreshBtn: document.getElementById('refresh-btn'), // 新增刷新按鈕
+        sheetLink: document.getElementById('sheet-link'), // 連結到試算表
+        prevBtn: document.getElementById('prev-btn'),
+        nextBtn: document.getElementById('next-btn'),
+        intervalSelect: document.getElementById('interval-select')
+    };
+
+    // --- 核心邏輯 ---
+
+    async function init() {
+        els.sheetLink.href = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
+        await fetchData();
+        updateUI(0);
+    }
+
+    // 從 Google Sheets 獲取資料
+    async function fetchData() {
+        els.topTextDisplay.innerText = "正在載入資料...";
+        try {
+            const response = await fetch(DATA_URL);
+            const csvText = await response.text();
+            
+            // 使用簡單 CSV 解析器
+            wordCards = parseCSV(csvText);
+            
+            els.topTextDisplay.innerText = "載入成功！";
+            return true;
+        } catch (error) {
+            console.error("Failed to fetch data from Google Sheets:", error);
+            els.topTextDisplay.innerText = "資料載入失敗，請檢查 SHEET_ID 和發佈設定是否正確。";
+            wordCards = [];
+            return false;
+        }
+    }
+
+    // 簡化版的 CSV 轉 JSON 函數 (假設格式固定為 imgUrl, topText, bottomText, visible)
+    function parseCSV(csv) {
+        const lines = csv.trim().split('\n');
+        if (lines.length < 2) return []; // 至少需要標題和一行資料
+        
+        // 標題行：我們假設是 imgUrl, topText, bottomText, visible
+        // const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+
+        const data = [];
+        for (let i = 1; i < lines.length; i++) {
+            // 簡單分割，不處理複雜的逗號包在引號內的情況
+            const cols = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+            
+            const [imgUrl, topText, bottomText, visible] = cols;
+
+            // 僅處理有內容的卡片，並根據 visible 欄位設定狀態
+            if (imgUrl || topText || bottomText) {
+                const card = {
+                    imgUrl: imgUrl,
+                    topText: topText,
+                    bottomText: bottomText,
+                    // Sheets CSV 導出時 TRUE/FALSE 是純文字，所以我們轉換一下
+                    visible: visible.toUpperCase() !== 'FALSE' 
+                };
+                data.push(card);
+            }
+        }
+        return data;
+    }
+
+    function getPlayableIndices() {
+        const showAll = els.showAllCheck.checked;
+        return wordCards
+            .map((card, index) => ({ index, visible: card.visible !== false }))
+            .filter(item => showAll || item.visible)
+            .map(item => item.index);
+    }
+
+    function isImageUrl(string) {
+        if (!string) return false;
+        return string.trim().toLowerCase().startsWith('http') && string.trim().length > 10;
+    }
+
+    function updateUI(targetIndex) {
+        const indices = getPlayableIndices();
+
+        if (indices.length === 0) {
+            els.img.style.display = 'none';
+            els.topTextDisplay.style.display = 'block';
+            els.topTextDisplay.innerText = wordCards.length === 0 ? "無資料，請在 Google Sheets 中新增。" : "所有卡片都被設定為隱藏。";
+            els.wordDisplay.innerText = "";
+            currentIndex = -1;
+            stopPlayer();
+            return;
+        }
+
+        if (!indices.includes(targetIndex)) targetIndex = indices[0];
+        currentIndex = targetIndex;
+        const card = wordCards[currentIndex];
+
+        // --- 處理上半部顯示 ---
+        const imageUrl = card.imgUrl || "";
+        const topText = card.topText || "";
+
+        if (isImageUrl(imageUrl)) {
+            els.img.src = imageUrl;
+            els.img.style.display = 'block';
+            els.topTextDisplay.style.display = 'none';
+        } else {
+            els.img.style.display = 'none';
+            els.topTextDisplay.innerText = topText || 'No Top Content';
+            els.topTextDisplay.style.display = 'block';
+        }
+
+        // --- 處理下半部解釋文字 ---
+        els.wordDisplay.innerHTML = (card.bottomText || '').replace(/\n/g, '<br>');
+
+        // --- 隱藏邏輯 ---
+        let shouldHide = false;
+        if (isPlaying) {
+            shouldHide = true;
+            tempReveal = false;
+        } else {
+            if (els.hideTextCheck.checked) shouldHide = !tempReveal;
+            else shouldHide = false;
+        }
+
+        if (shouldHide) els.wordDisplay.classList.add('text-hidden');
+        else els.wordDisplay.classList.remove('text-hidden');
+    }
+
+    // --- 播放器控制與導航 (保持不變) ---
+    function togglePlay() { isPlaying ? stopPlayer() : startPlayer(); }
+
+    function startPlayer() {
+        if (getPlayableIndices().length === 0) return;
+        isPlaying = true;
+        els.playBtn.innerText = "❚❚";
+        tempReveal = false;
+        updateUI(currentIndex);
+        if (playInterval) clearInterval(playInterval);
+        playInterval = setInterval(() => goNext(true), parseInt(els.intervalSelect.value));
+    }
+    
+    function stopPlayer() {
+        isPlaying = false;
+        els.playBtn.innerText = "▶";
+        tempReveal = false;
+        updateUI(currentIndex);
+        if (playInterval) clearInterval(playInterval);
+    }
+    
+    function goNext(auto = false) {
+        tempReveal = false;
+        const indices = getPlayableIndices();
+        if (indices.length === 0) return;
+        let currentPos = indices.indexOf(currentIndex);
+        let nextPos = (currentPos + 1) % indices.length;
+
+        if (!auto && isPlaying) {
+             clearInterval(playInterval);
+             playInterval = setInterval(() => goNext(true), parseInt(els.intervalSelect.value));
+        }
+        updateUI(indices[nextPos]);
+    }
+    
+    function goPrev() {
+        tempReveal = false;
+        const indices = getPlayableIndices();
+        if (indices.length === 0) return;
+        let currentPos = indices.indexOf(currentIndex);
+        let prevPos = (currentPos - 1 + indices.length) % indices.length;
+        if (isPlaying) {
+             clearInterval(playInterval);
+             playInterval = setInterval(() => goNext(true), parseInt(els.intervalSelect.value));
+        }
+        updateUI(indices[prevPos]);
+    }
+
+
+    // --- 事件處理 ---
+
+    els.playBtn.addEventListener('click', togglePlay);
+    els.prevBtn.addEventListener('click', (e) => { e.stopPropagation(); goPrev(); });
+    els.nextBtn.addEventListener('click', (e) => { e.stopPropagation(); goNext(); });
+    els.showAllCheck.addEventListener('change', () => updateUI(currentIndex));
+    els.hideTextCheck.addEventListener('change', () => updateUI(currentIndex));
+
+    // 重新載入資料
+    els.refreshBtn.addEventListener('click', async () => {
+        stopPlayer();
+        const success = await fetchData();
+        if (success) updateUI(0);
+    });
+
+    // 文字區互動
+    els.wordDisplay.addEventListener('click', () => {
+        if (isPlaying) {
+            stopPlayer();
+            tempReveal = true;
+            updateUI(currentIndex);
+        } else {
+            if (els.hideTextCheck.checked) {
+                if (els.wordDisplay.classList.contains('text-hidden')) {
+                    tempReveal = true;
+                    updateUI(currentIndex);
+                } else {
+                    startPlayer();
+                }
+            } else {
+                startPlayer();
+            }
+        }
+    });
+
+    init();
+</script>
+</body>
+</html>
